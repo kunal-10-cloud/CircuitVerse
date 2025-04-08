@@ -245,6 +245,10 @@ export default class Scope {
             subCircuitScopeIds: [],
         };
 
+        // Add folder structure for subcircuits
+        this.folders = []; // Array to store folder metadata
+        this.subcircuitMap = {}; // Map to store subcircuit-to-folder relationship
+
         this.ox = 0;
         this.oy = 0;
         this.scale = DPR;
@@ -569,5 +573,157 @@ export default class Scope {
                 });
             }
         }
+    }
+
+    /**
+     * Creates a new folder for subcircuits
+     * @param {string} name - folder name
+     * @param {string} parentId - parent folder id (null for root)
+     * @returns {string} - id of the created folder
+     */
+    createFolder(name, parentId = null) {
+        console.log(`[Scope.createFolder] Creating folder "${name}" with parent ${parentId}`);
+        
+        if (!this.folders) {
+            console.log("[Scope.createFolder] Initializing empty folders array");
+            this.folders = [];
+        }
+        
+        if (!this.subcircuitMap) {
+            console.log("[Scope.createFolder] Initializing empty subcircuitMap");
+            this.subcircuitMap = {};
+        }
+
+        try {
+            const folderId = `folder-${Math.floor((Math.random() * 100000000000) + 1)}`;
+            const folder = {
+                id: folderId,
+                name: name,
+                parentId: parentId,
+                created: new Date().getTime()
+            };
+            
+            this.folders.push(folder);
+            console.log(`[Scope.createFolder] Folder created with ID: ${folderId}`, folder);
+            return folderId;
+        } catch (error) {
+            console.error("[Scope.createFolder] Error creating folder:", error);
+            throw new Error("Failed to create folder: " + error.message);
+        }
+    }
+
+    /**
+     * Assigns a subcircuit to a folder
+     * @param {string} subcircuitId - id of the subcircuit
+     * @param {string} folderId - id of the folder
+     */
+    assignSubcircuitToFolder(subcircuitId, folderId) {
+        if (!this.subcircuitMap) {
+            this.subcircuitMap = {};
+        }
+        
+        console.log(`[Scope.assignSubcircuitToFolder] Assigning subcircuit ${subcircuitId} to folder ${folderId}`);
+        this.subcircuitMap[subcircuitId] = folderId;
+    }
+
+    /**
+     * Gets the folder for a subcircuit
+     * @param {string} subcircuitId - id of the subcircuit
+     * @returns {string} - folder id or null if not assigned
+     */
+    getSubcircuitFolder(subcircuitId) {
+        if (!this.subcircuitMap) {
+            this.subcircuitMap = {};
+            return null;
+        }
+        
+        return this.subcircuitMap[subcircuitId] || null;
+    }
+
+    /**
+     * Gets all subcircuits in a folder
+     * @param {string} folderId - id of the folder
+     * @returns {Array} - array of subcircuit ids
+     */
+    getSubcircuitsInFolder(folderId) {
+        if (!this.subcircuitMap) {
+            this.subcircuitMap = {};
+            return [];
+        }
+        
+        const result = [];
+        for (const subcircuitId in this.subcircuitMap) {
+            if (Object.prototype.hasOwnProperty.call(this.subcircuitMap, subcircuitId) && 
+                this.subcircuitMap[subcircuitId] === folderId) {
+                result.push(subcircuitId);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Renames a folder
+     * @param {string} folderId - id of the folder
+     * @param {string} newName - new name for the folder
+     */
+    renameFolder(folderId, newName) {
+        if (!this.folders) {
+            this.folders = [];
+            console.warn("[Scope.renameFolder] Folders array was not initialized");
+            return;
+        }
+        
+        console.log(`[Scope.renameFolder] Renaming folder ${folderId} to "${newName}"`);
+        const folder = this.folders.find((f) => f.id === folderId);
+        if (folder) {
+            folder.name = newName;
+            console.log("[Scope.renameFolder] Folder renamed successfully");
+        } else {
+            console.error(`[Scope.renameFolder] Folder with ID ${folderId} not found`);
+        }
+    }
+
+    /**
+     * Deletes a folder and reassigns subcircuits to parent
+     * @param {string} folderId - id of the folder to delete
+     */
+    deleteFolder(folderId) {
+        if (!this.folders || !this.subcircuitMap) {
+            console.error("[Scope.deleteFolder] Folders array or subcircuitMap not initialized");
+            return;
+        }
+        
+        console.log(`[Scope.deleteFolder] Deleting folder ${folderId}`);
+        
+        // Get the parent folder
+        const folderToDelete = this.folders.find((f) => f.id === folderId);
+        if (!folderToDelete) {
+            console.error(`[Scope.deleteFolder] Folder with ID ${folderId} not found`);
+            return;
+        }
+        
+        const parentId = folderToDelete.parentId;
+        console.log(`[Scope.deleteFolder] Parent folder ID: ${parentId}`);
+        
+        // Reassign all subcircuits to parent folder
+        for (const subcircuitId in this.subcircuitMap) {
+            if (Object.prototype.hasOwnProperty.call(this.subcircuitMap, subcircuitId) && 
+                this.subcircuitMap[subcircuitId] === folderId) {
+                this.subcircuitMap[subcircuitId] = parentId;
+                console.log(`[Scope.deleteFolder] Reassigned subcircuit ${subcircuitId} to parent folder ${parentId}`);
+            }
+        }
+        
+        // Reassign all child folders to parent folder
+        for (const folder of this.folders) {
+            if (folder.parentId === folderId) {
+                folder.parentId = parentId;
+                console.log(`[Scope.deleteFolder] Reassigned child folder ${folder.id} to parent folder ${parentId}`);
+            }
+        }
+        
+        // Remove folder from folders array
+        this.folders = this.folders.filter((f) => f.id !== folderId);
+        console.log("[Scope.deleteFolder] Folder deleted successfully");
     }
 }

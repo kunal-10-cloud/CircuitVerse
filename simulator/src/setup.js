@@ -18,6 +18,7 @@ import load from './data/load';
 import save from './data/save';
 import { showTourGuide } from './tutorials';
 import setupModules from './moduleSetup';
+import { initFolderPanel, updateFolderPanel } from './folderPanel';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/addon/hint/show-hint.css';
 import 'codemirror/mode/javascript/javascript'; // verilog.js from codemirror is not working because array prototype is changed.
@@ -149,7 +150,14 @@ export function setup() {
     const startListeners = embed ? startEmbedListeners : startMainListeners;
     setupElementLists();
     setupEnvironment();
-    if (!embed) { setupUI(); }
+    if (!embed) { 
+        setupUI();
+        
+        // Initialize folder panel for subcircuits
+        setTimeout(() => {
+            initFolderPanel();
+        }, 1000);
+    }
     startListeners();
     if (!embed) { keyBinder(); }
 
@@ -165,6 +173,11 @@ export function setup() {
                     if (data) {
                         load(data);
                         simulationArea.changeClockTime(data.timePeriod || 500);
+                        
+                        // Update folder panel after loading project
+                        if (!embed) {
+                            updateFolderPanel();
+                        }
                     }
                     $('.loadingIcon').fadeOut();
                 },
@@ -180,6 +193,11 @@ export function setup() {
             localStorage.removeItem('recover');
             localStorage.removeItem('recover_login');
             save();
+            
+            // Update folder panel after restoring data
+            if (!embed) {
+                updateFolderPanel();
+            }
         } else if (localStorage.getItem('recover')) {
             // Restore unsaved data which didn't get saved due to error
             showMessage("We have detected that you did not save your last work. Don't worry we have recovered them. Access them using Project->Recover");

@@ -32,6 +32,7 @@ import { setupTimingListeners } from './plotArea';
 import { getProjectName } from './data/save';
 import logixFunction from './data';
 import createSaveAsImgPrompt from './data/saveImage';
+import { updateFolderPanel } from './folderPanel';
 
 const unit = 10;
 let coordinate;
@@ -895,6 +896,50 @@ export default function startListeners() {
     layoutElementPanelListner.addEventListener('touchend', () => {
         dragEnd();
     });
+
+    // Function to switch circuit with support for folder panel update
+    window.switchCircuit = function switchCircuit(id) {
+        if (id === globalScope.id) return;
+        const scope = scopeList[id];
+        if (scope === undefined) return;
+        const confirmed = layoutModeGet() || !checkToSave() || confirm('Do you want to discard all changes made to this circuit?');
+        if (!confirmed) return;
+
+        // disable wire-drag-auto-select feature when changing tabs
+        simulationArea.wireModeDrag = false;
+        if (errorDetectedSet(false) && scope) {
+            // If an error is detected, then update error canvas to that particular scope
+            scopeList[errorDetectedSet()].showError = true;
+        }
+        simulationArea.lastSelected = undefined;
+        simulationArea.multipleObjectSelections = [];
+        simulationArea.copyList = [];
+        globalScope = scope;
+        
+        // Update folder panel when the scope changes
+        updateFolderPanel(scope);
+        
+        $('.circuits').removeClass('current');
+        $(`#${id}`).addClass('current');
+        if (simulationArea.lastSelected === undefined) {
+            udpateCanvasSet(true);
+            simulationArea.transform = newRecordMap[globalScope.id] || new DOMMatrix();
+            findDimensions();
+            updateSimulationSet(true);
+            updateSubcircuitSet(true);
+            dots();
+        }
+
+        circuitProperty.reset();
+    };
+
+    // Add event for scope change to update folder panel
+    window.globalScope.addEventListener = window.globalScope.addEventListener || {};
+    const oldUpdateScope = window.globalScope.updateScope || function() {};
+    window.globalScope.updateScope = function(scope) {
+        oldUpdateScope.call(this, scope);
+        updateFolderPanel(scope);
+    };
 }
 function resizeTabs() {
     const $windowsize = $('body').width();

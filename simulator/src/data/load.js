@@ -105,6 +105,22 @@ export function loadScope(scope, data) {
 
     // Make all connections
     for (let i = 0; i < data.allNodes.length; i++) { constructNodeConnections(scope.allNodes[i], data.allNodes[i]); }
+    
+    // Load folder structure for subcircuits if it exists
+    if (data.folders) {
+        scope.folders = data.folders;
+    } else {
+        // Create an empty folders array for backward compatibility
+        scope.folders = [];
+    }
+    
+    if (data.subcircuitMap) {
+        scope.subcircuitMap = data.subcircuitMap;
+    } else {
+        // Create an empty map for backward compatibility
+        scope.subcircuitMap = {};
+    }
+    
     // Load all modules
     for (let i = 0; i < ML.length; i++) {
         if (data[ML[i]]) {

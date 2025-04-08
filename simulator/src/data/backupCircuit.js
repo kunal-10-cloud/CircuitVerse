@@ -30,6 +30,10 @@ export function backUp(scope = globalScope) {
     // Storing Verilog Properties
     data.verilogMetadata = scope.verilogMetadata;
 
+    // Store folder structure for subcircuits
+    data.folders = scope.folders || [];
+    data.subcircuitMap = scope.subcircuitMap || {};
+
     // Storing all nodes
     data.allNodes = scope.allNodes.map(extract);
 

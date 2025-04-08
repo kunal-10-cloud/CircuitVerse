@@ -3,3 +3,11 @@ public/js/**/*.min.js
 
 # Exclude third-party libraries
 public/js/plugins/**/*.js
+
+#ignoring at this point to showcase only the implementation part
+simulator/src/data/load.js
+simulator/src/data/backupCircuit.js
+simulator/src/circuit.js
+simulator/src/folderPanel.js
+simulator/src/listeners.js
+simulator/src/setup.js
