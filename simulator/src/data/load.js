@@ -1,10 +1,11 @@
+/* eslint-disable import/no-cycle */
 import { resetScopeList, newCircuit, switchCircuit } from '../circuit';
 import { setProjectName } from './save';
 import {
- scheduleUpdate, update, updateSimulationSet, updateCanvasSet, gridUpdateSet 
+    scheduleUpdate, update, updateSimulationSet, updateCanvasSet, gridUpdateSet,
 } from '../engine';
 import { updateRestrictedElementsInScope } from '../restrictedElementDiv';
-import simulationArea from '../simulationArea';
+import simulationArea, { changeClockTime } from '../simulationArea';
 
 import { loadSubCircuit } from '../subcircuit';
 import { scheduleBackup } from './backupCircuit';
@@ -52,26 +53,29 @@ function loadModule(data, scope) {
 
     // Restore other values
     if (data.customData.values) {
-        for (var prop in data.customData.values) {
-            obj[prop] = data.customData.values[prop];
-        }
+        Object.keys(data.customData.values).forEach((prop) => {
+            if (Object.prototype.hasOwnProperty.call(data.customData.values, prop)) {
+                obj[prop] = data.customData.values[prop];
+            }
+        });
     }
 
     // Replace new nodes with the correct old nodes (with connections)
     if (data.customData.nodes) {
-        for (const node in data.customData.nodes) {
-            const n = data.customData.nodes[node];
-            if (n instanceof Array) {
-                for (let i = 0; i < n.length; i++) {
-                    obj[node][i] = replace(obj[node][i], n[i]);
+        Object.keys(data.customData.nodes).forEach((node) => {
+            if (Object.prototype.hasOwnProperty.call(data.customData.nodes, node)) {
+                const n = data.customData.nodes[node];
+                if (n instanceof Array) {
+                    for (let i = 0; i < n.length; i++) {
+                        obj[node][i] = replace(obj[node][i], n[i]);
+                    }
+                } else {
+                    obj[node] = replace(obj[node], n);
                 }
-            } else {
-                obj[node] = replace(obj[node], n);
             }
-        }
+        });
     }
-    if(data.subcircuitMetadata)
-        obj.subcircuitMetadata = data["subcircuitMetadata"];
+    if (data.subcircuitMetadata) obj.subcircuitMetadata = data.subcircuitMetadata;
 }
 
 /**
@@ -98,76 +102,90 @@ function removeBugNodes(scope = globalScope) {
  */
 export function loadScope(scope, data) {
     const ML = moduleList.slice(); // Module List copy
-    scope.restrictedCircuitElementsUsed = data.restrictedCircuitElementsUsed;
+    const newScope = {
+        ...scope,
+        restrictedCircuitElementsUsed: data.restrictedCircuitElementsUsed,
+    };
 
     // Load all nodes
-    data.allNodes.map((x) => loadNode(x, scope));
+    data.allNodes.forEach((x) => loadNode(x, newScope));
 
     // Make all connections
-    for (let i = 0; i < data.allNodes.length; i++) { constructNodeConnections(scope.allNodes[i], data.allNodes[i]); }
+    for (let i = 0; i < data.allNodes.length; i++) { constructNodeConnections(newScope.allNodes[i], data.allNodes[i]); }
     // Load all modules
     for (let i = 0; i < ML.length; i++) {
         if (data[ML[i]]) {
             if (ML[i] === 'SubCircuit') {
                 // Load subcircuits differently
-                for (let j = 0; j < data[ML[i]].length; j++) { loadSubCircuit(data[ML[i]][j], scope); }
+                for (let j = 0; j < data[ML[i]].length; j++) { loadSubCircuit(data[ML[i]][j], newScope); }
             } else {
                 // Load everything else similarly
                 for (let j = 0; j < data[ML[i]].length; j++) {
-                    loadModule(data[ML[i]][j], scope);
+                    loadModule(data[ML[i]][j], newScope);
                 }
             }
         }
     }
     // Update wires according
-    scope.wires.map((x) => {
-        x.updateData(scope);
+    newScope.wires.forEach((x) => {
+        x.updateData(newScope);
     });
-    removeBugNodes(scope); // To be deprecated
+    removeBugNodes(newScope); // To be deprecated
 
     // If Verilog Circuit Metadata exists, then restore
     if (data.verilogMetadata) {
-        scope.verilogMetadata = data.verilogMetadata;
+        Object.assign(newScope, { verilogMetadata: data.verilogMetadata });
     }
 
     // If Test exists, then restore
     if (data.testbenchData) {
-        globalScope.testbenchData = new TestbenchData(
-            data.testbenchData.testData,
-            data.testbenchData.currentGroup,
-            data.testbenchData.currentCase
-        );
+        Object.assign(newScope, {
+            testbenchData: new TestbenchData(
+                data.testbenchData.testData,
+                data.testbenchData.currentGroup,
+                data.testbenchData.currentCase,
+            ),
+        });
     }
 
     // If layout exists, then restore
     if (data.layout) {
-        scope.layout = data.layout;
+        Object.assign(newScope, { layout: data.layout });
     } else {
         // Else generate new layout according to how it would have been otherwise (backward compatibility)
-        scope.layout = {};
-        scope.layout.width = 100;
-        scope.layout.height = Math.max(scope.Input.length, scope.Output.length) * 20 + 20;
-        scope.layout.title_x = 50;
-        scope.layout.title_y = 13;
-        for (let i = 0; i < scope.Input.length; i++) {
-            scope.Input[i].layoutProperties = {
+        const newLayout = {
+            width: 100,
+            height: Math.max(newScope.Input.length, newScope.Output.length) * 20 + 20,
+            title_x: 50,
+            title_y: 13,
+        };
+        Object.assign(newScope, { layout: newLayout });
+
+        const inputLayouts = newScope.Input.map((input, i) => ({
+            ...input,
+            layoutProperties: {
                 x: 0,
-                y: scope.layout.height / 2 - scope.Input.length * 10 + 20 * i + 10,
+                y: newScope.layout.height / 2 - newScope.Input.length * 10 + 20 * i + 10,
                 id: generateId(),
-            };
-        }
-        for (let i = 0; i < scope.Output.length; i++) {
-            scope.Output[i].layoutProperties = {
-                x: scope.layout.width,
-                y: scope.layout.height / 2 - scope.Output.length * 10 + 20 * i + 10,
+            },
+        }));
+        const outputLayouts = newScope.Output.map((output, i) => ({
+            ...output,
+            layoutProperties: {
+                x: newScope.layout.width,
+                y: newScope.layout.height / 2 - newScope.Output.length * 10 + 20 * i + 10,
                 id: generateId(),
-            };
-        }
+            },
+        }));
+        Object.assign(newScope, { Input: inputLayouts, Output: outputLayouts });
     }
     // Backward compatibility
-    if (scope.layout.titleEnabled === undefined) { scope.layout.titleEnabled = true; }
-}
+    if (newScope.layout.titleEnabled === undefined) {
+        Object.assign(newScope, { layout: { ...newScope.layout, titleEnabled: true } });
+    }
 
+    return newScope;
+}
 
 // Function to load project from data
 /**
@@ -192,10 +210,9 @@ export default function load(data) {
 
     // Load all  according to the dependency order
     for (let i = 0; i < data.scopes.length; i++) {
-
         var isVerilogCircuit = false;
         var isMainCircuit = false;
-        if(data.scopes[i].verilogMetadata) {
+        if (data.scopes[i].verilogMetadata) {
             isVerilogCircuit = data.scopes[i].verilogMetadata.isVerilogCircuit;
             isMainCircuit = data.scopes[i].verilogMetadata.isMainCircuit;
         }
@@ -221,23 +238,23 @@ export default function load(data) {
     }
 
     // Restore clock
-    simulationArea.changeClockTime(data.timePeriod || 500);
+    changeClockTime(data.timePeriod || 500);
     simulationArea.clockEnabled = data.clockEnabled === undefined ? true : data.clockEnabled;
-
 
     if (!embed) { showProperties(simulationArea.lastSelected); }
 
     // Reorder tabs according to the saved order
     if (data.orderedTabs) {
-        var unorderedTabs = $('.circuits').detach();
-        var plusButton = $('#tabsBar').children().detach();
-        for (const tab of data.orderedTabs) { $('#tabsBar').append(unorderedTabs.filter(`#${tab}`)); }
-        $('#tabsBar').append(plusButton); 
+        const unorderedTabs = $('.circuits').detach();
+        const plusButton = $('#tabsBar').children().detach();
+        data.orderedTabs.forEach((tab) => {
+            $('#tabsBar').append(unorderedTabs.filter(`#${tab}`));
+        });
+        $('#tabsBar').append(plusButton);
     }
 
     // Switch to last focussedCircuit
-    if (data.focussedCircuit) 
-        switchCircuit(data.focussedCircuit);
+    if (data.focussedCircuit) { switchCircuit(data.focussedCircuit); }
 
     // Update the testbench UI
     updateTestbenchUI();
@@ -246,7 +263,6 @@ export default function load(data) {
     updateCanvasSet(true);
     gridUpdateSet(true);
     // Reset Timing
-    if(!embed)
-        plotArea.reset();
+    if (!embed) plotArea.reset();
     scheduleUpdate(1);
 }
